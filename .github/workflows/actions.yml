@@ -1,0 +1,49 @@
+name: Basic GitHub Actions example
+
+on:
+  push:
+    branches:
+      - master
+      - '[0-9]+*'
+    tags:
+      - 'v[0-9]+'
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash # enables "-e -o pipefail", so a failing cargo command is not hidden by `tee`
+
+jobs:
+  build:
+    name: build_and_run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.COMMIT }}
+
+      - name: Build (release)
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          { rustc --version; cargo --version; } | tee artifacts/build.log
+          cargo run --release 2>&1 | tee artifacts/build.log
+          cp target/release/hello_gha artifacts/
+
+      - name: Documentation
+        shell: bash
+        run: cargo doc 2>&1 | tee artifacts/doc.log
+
+      - name: Test
+        shell: bash
+        run: cargo test 2>&1 | tee artifacts/test.log
+
+      - name: Archive artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: hello_gha-${{ github.head_ref }}.${{ github.sha }}
+          path: artifacts/
