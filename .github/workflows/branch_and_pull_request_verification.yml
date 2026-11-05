@@ -1,0 +1,53 @@
+name: Branch and pull request verification
+
+on:
+  push:
+# Limit to certain branches and tags if needed:
+#    branches:
+#      - master
+#      - '[0-9]+*'
+#    tags:
+#      - 'v[0-9]+'
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash # enables "-e -o pipefail", so a failing cargo command is not hidden by `tee`
+
+jobs:
+  build:
+    name: build_and_run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.COMMIT }}
+
+      - name: Build (release)
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          { rustc --version; cargo --version; } | tee -a artifacts/build.log
+          cargo build --release
+          mkdir -p artifacts/bin
+          cp target/release/hello_gha artifacts/bin/
+
+      - name: Documentation
+        shell: bash
+        run: cargo doc 2>&1 | tee artifacts/doc.log
+
+      - name: Test
+        shell: bash
+        run: |
+          cargo test 2>&1 | tee -a artifacts/test.log
+          artifacts/bin/hello_gha 2>&1 | tee -a artifacts/test.log
+
+      - name: Archive artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hello_gha-${{ github.sha }}
+          path: artifacts/
